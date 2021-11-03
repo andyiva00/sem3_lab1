@@ -16,10 +16,5 @@ namespace sem3_lab1
         {
             InitializeComponent();
         }
-
-        private void Form1_Load(object sender, EventArgs e)
-        {
-
-        }
     }
 }
