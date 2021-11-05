@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -14,25 +15,37 @@ namespace sem3_lab1.CustomControls
     public partial class CustomTextBox : UserControl
     {
         #region -> Fields
-        // Fields
-        private Color borderColor = Color.MediumSlateBlue;
-        private Color borderFocusColor = Color.HotPink;
+        
+        private Color borderColor = Color.LightSeaGreen;
+        private Color borderFocusColor = Color.Goldenrod;
         private int borderSize = 2;
+        private int borderFocusedSize = 3;
+        private int borderRadius = 0;
         private bool underlinedStyle = false;
         private bool isFocused = false;
 
-        // Events
-        public event EventHandler _TextChanged;
         #endregion
 
-        // Constructor
+
+        #region -> Events
+
+        public event EventHandler _TextChanged;
+        
+        #endregion
+
+
+        #region -> Constructor
+        
         public CustomTextBox()
         {
             InitializeComponent();
         }
 
+        #endregion
+
+
         #region -> Properties
-        // Properties
+
         [Category("Custom Advance")]
         public Color BorderColor
         {
@@ -58,6 +71,17 @@ namespace sem3_lab1.CustomControls
             set
             {
                 borderSize = value;
+                this.Invalidate();
+            }
+        }
+
+        [Category("Custom Advance")]
+        public int BorderFocusedSize
+        {
+            get => borderFocusedSize;
+            set
+            {
+                borderFocusedSize = value;
                 this.Invalidate();
             }
         }
@@ -129,29 +153,81 @@ namespace sem3_lab1.CustomControls
             set => textBox1.Text = value;
         }
 
+        [Category("Custom Advance")]
+        public int BorderRadius
+        {
+            get => borderRadius;
+            set
+            {
+                if (value >= 0)
+                {
+                    borderRadius = value;
+                    this.Invalidate();
+                }
+                
+            }
+        }
+
         #endregion
 
-        // Overridden methods
+
+        #region -> Overridden methods
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
             Graphics graph = e.Graphics;
 
-            // Draw border
-            using (Pen penBorder = new Pen(borderColor, borderSize))
+            if (borderRadius > 1 && !isFocused)  // Rounded TextBox
             {
-                penBorder.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
+                // Fields
+                var rectBorderSmooth = this.ClientRectangle;
+                var rectBorder = Rectangle.Inflate(rectBorderSmooth, -BorderSize, -BorderSize);
+                int smoothSize = borderSize > 0 ? borderSize : 1;
 
-                if (!isFocused)
+                using (GraphicsPath pathBorderSmooth = GetFigurePath(rectBorderSmooth, borderRadius))
+                using (GraphicsPath pathBorder = GetFigurePath(rectBorder, borderRadius - borderSize))
+                using (Pen penBorderSmooth = new Pen(this.Parent.BackColor, smoothSize))
+                using (Pen penBorder = new Pen(borderColor, borderSize))
                 {
+                    // Drawing
+                    this.Region = new Region(pathBorderSmooth);  // Set the rounded region UserControl
+                    
+                    if (borderRadius > 15)
+                        SetTextBoxRoundedRegion();  //Set the rounded region of TextBox componet
+
+                    graph.SmoothingMode = SmoothingMode.AntiAlias;
+                    penBorder.Alignment = PenAlignment.Inset;
+                    
+                    if (isFocused)
+                        penBorder.Color = borderFocusColor;
+
                     if (underlinedStyle)  // Line Style
+                    {
+                        // Draw border smoothing
+                        graph.DrawPath(penBorderSmooth, pathBorderSmooth);
+                        // Draw border
+                        graph.SmoothingMode = SmoothingMode.None;
                         graph.DrawLine(penBorder, 0, this.Height - 1, this.Width, this.Height - 1);
+                    }
                     else  // Normal Style
-                        graph.DrawRectangle(penBorder, 0, 0, this.Width - 0.5F, this.Height - 0.5F);
+                    {
+                        // Draw border smoothing
+                        graph.DrawPath(penBorderSmooth, pathBorderSmooth);
+                        // Draw border
+                        graph.DrawPath(penBorder, pathBorder);
+                    }
                 }
-                else
+            }
+            else  // Square/Normal TextBox
+            {
+                // Draw border
+                using (Pen penBorder = new Pen(borderColor, isFocused ? borderFocusedSize : borderSize))
                 {
-                    penBorder.Color = borderFocusColor;
+                    this.Region = new Region(this.ClientRectangle);
+                    penBorder.Alignment = PenAlignment.Inset;
+                    if (isFocused)
+                        penBorder.Color = borderFocusColor;
 
                     if (underlinedStyle)  // Line Style
                         graph.DrawLine(penBorder, 0, this.Height - 1, this.Width, this.Height - 1);
@@ -160,6 +236,8 @@ namespace sem3_lab1.CustomControls
 
                 }
             }
+
+            
         }
 
         protected override void OnResize(EventArgs e)
@@ -175,7 +253,11 @@ namespace sem3_lab1.CustomControls
             UpdateControlHeight();
         }
 
-        // Private methods
+        #endregion
+
+
+        #region -> Private methods
+
         private void UpdateControlHeight()
         {
             if (textBox1.Multiline == false)
@@ -188,6 +270,41 @@ namespace sem3_lab1.CustomControls
                 this.Height = textBox1.Height + this.Padding.Top + this.Padding.Bottom;
             }
         }
+
+        private GraphicsPath GetFigurePath(Rectangle rect, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            float curveSize = radius * 2;
+
+            path.StartFigure();
+            path.AddArc(rect.X, rect.Y, curveSize, curveSize, 180, 90);
+            path.AddArc(rect.Right - curveSize, rect.Y, curveSize, curveSize, 270, 90);
+            path.AddArc(rect.Right - curveSize, rect.Bottom - curveSize, curveSize, curveSize, 0, 90);
+            path.AddArc(rect.X, rect.Bottom - curveSize, curveSize, curveSize, 90, 90);
+            path.CloseFigure();
+
+            return path;
+        }
+
+        private void SetTextBoxRoundedRegion()
+        {
+            GraphicsPath pathText;
+            if (Multiline)
+            {
+                pathText = GetFigurePath(textBox1.ClientRectangle, BorderRadius - borderSize);
+                textBox1.Region = new Region(pathText);
+            }
+            else
+            {
+                pathText = GetFigurePath(textBox1.ClientRectangle, borderSize * 2);
+                textBox1.Region = new Region(pathText);
+            }
+        }
+
+        #endregion
+
+
+        #region TextBox events
 
         private void textBox1_TextChanged(object sender, EventArgs e)
         {
@@ -226,5 +343,7 @@ namespace sem3_lab1.CustomControls
             isFocused = false;
             this.Invalidate();
         }
+
+        #endregion
     }
 }
